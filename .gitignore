@@ -5,6 +5,7 @@ src/generated/prisma/
 .env
 .env.*
 !.env.example
+AGENTS.md
 *.log
 
 # Credenciales y claves privadas
@@ -14,7 +15,14 @@ src/generated/prisma/
 *.pfx
 *.jks
 *.keystore
+*.crt
+*.cer
+*.der
+*.kdbx
+id_rsa*
+id_ed25519*
 credentials*.json
+service-account*.json
 secrets/
 
 # Cachés, temporales y respaldos
@@ -29,3 +37,5 @@ backups/
 *.dump
 *.sql.gz
 *.sql.zip
+*.sql
+!prisma/migrations/**/migration.sql
