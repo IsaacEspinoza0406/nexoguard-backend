@@ -1,0 +1,31 @@
+node_modules/
+dist/
+coverage/
+src/generated/prisma/
+.env
+.env.*
+!.env.example
+*.log
+
+# Credenciales y claves privadas
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+secrets/
+
+# Cachés, temporales y respaldos
+.cache/
+.turbo/
+*.tsbuildinfo
+*.tmp
+*.temp
+backups/
+*.bak
+*.backup
+*.dump
+*.sql.gz
+*.sql.zip
