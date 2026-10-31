@@ -1,0 +1,131 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider     = "mysql"
+  relationMode = "foreignKeys"
+}
+
+model Usuario {
+  id                String    @id @default(uuid()) @db.Char(36)
+  correoOriginal    String    @map("correo_original") @db.VarChar(254)
+  correoNormalizado String    @unique @map("correo_normalizado") @db.VarChar(254)
+  passwordHash      String    @map("password_hash") @db.VarChar(255)
+  creadoEn          DateTime  @default(now()) @map("creado_en") @db.DateTime(3)
+  sesiones          Sesion[]
+  sitios            Sitio[]
+
+  @@map("usuarios")
+}
+
+model Sesion {
+  id                 String    @id @default(uuid()) @db.Char(36)
+  usuarioId          String?   @map("usuario_id") @db.Char(36)
+  identificadorHash  Bytes     @unique @map("identificador_hash") @db.Binary(32)
+  creadoEn           DateTime  @default(now()) @map("creado_en") @db.DateTime(3)
+  ultimoUsoEn        DateTime  @map("ultimo_uso_en") @db.DateTime(3)
+  expiraAbsolutoEn   DateTime  @map("expira_absoluto_en") @db.DateTime(3)
+  revocadoEn         DateTime? @map("revocado_en") @db.DateTime(3)
+  usuario            Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([usuarioId])
+  @@map("sesiones")
+}
+
+model Sitio {
+  id               String            @id @default(uuid()) @db.Char(36)
+  propietarioId    String            @map("propietario_id") @db.Char(36)
+  dominioCanonico  String            @map("dominio_canonico") @db.VarChar(253)
+  revisionActualId String?           @map("revision_actual_id") @db.Char(36)
+  creadoEn         DateTime          @default(now()) @map("creado_en") @db.DateTime(3)
+  propietario      Usuario           @relation(fields: [propietarioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisiones       RevisionDominio[] @relation("Historial")
+  revisionActual   RevisionDominio?  @relation("Actual", fields: [revisionActualId, id, dominioCanonico], references: [id, sitioId, dominioCanonico], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([propietarioId, dominioCanonico])
+  @@unique([revisionActualId, id, dominioCanonico])
+  @@map("sitios")
+}
+
+model RevisionDominio {
+  id              String                @id @default(uuid()) @db.Char(36)
+  sitioId         String                @map("sitio_id") @db.Char(36)
+  numeroRevision  Int                   @map("numero_revision") @db.UnsignedInt
+  dominioCanonico String                @map("dominio_canonico") @db.VarChar(253)
+  creadoEn        DateTime              @default(now()) @map("creado_en") @db.DateTime(3)
+  sitio           Sitio                 @relation("Historial", fields: [sitioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actualPara      Sitio?                @relation("Actual")
+  verificaciones  VerificacionDominio[]
+
+  @@unique([sitioId, numeroRevision])
+  @@unique([id, sitioId, dominioCanonico])
+  @@map("revisiones_dominio")
+}
+
+model VerificacionDominio {
+  id                       String          @id @default(uuid()) @db.Char(36)
+  revisionDominioId        String          @map("revision_dominio_id") @db.Char(36)
+  codigoHash               Bytes           @map("codigo_hash") @db.Binary(32)
+  creadoEn                 DateTime        @default(now()) @map("creado_en") @db.DateTime(3)
+  desafioExpiraEn          DateTime        @map("desafio_expira_en") @db.DateTime(3)
+  verificadoEn             DateTime?       @map("verificado_en") @db.DateTime(3)
+  verificacionValidaHasta  DateTime?       @map("verificacion_valida_hasta") @db.DateTime(3)
+  invalidadoEn             DateTime?       @map("invalidado_en") @db.DateTime(3)
+  revisionDominio          RevisionDominio @relation(fields: [revisionDominioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  analisis                 Analisis[]
+
+  @@index([revisionDominioId, creadoEn])
+  @@map("verificaciones_dominio")
+}
+
+enum EstadoAnalisis {
+  PENDIENTE
+  EN_EJECUCION
+  COMPLETADO
+  FALLIDO
+}
+
+enum EstadoResultado {
+  APROBADO
+  HALLAZGO
+  NO_APLICABLE
+  NO_EVALUADO
+}
+
+model Analisis {
+  id                String                @id @default(uuid()) @db.Char(36)
+  verificacionId    String                @map("verificacion_id") @db.Char(36)
+  estado            EstadoAnalisis
+  procedencia       String                @db.VarChar(50)
+  creadoEn          DateTime              @default(now()) @map("creado_en") @db.DateTime(3)
+  iniciadoEn        DateTime?             @map("iniciado_en") @db.DateTime(3)
+  finalizadoEn      DateTime?             @map("finalizado_en") @db.DateTime(3)
+  motivoFallo       String?               @map("motivo_fallo") @db.VarChar(255)
+  versionReclamo    Int                   @default(0) @map("version_reclamo") @db.UnsignedInt
+  intentos          Int                   @default(0) @db.UnsignedInt
+  reclamoExpiraEn   DateTime?             @map("reclamo_expira_en") @db.DateTime(3)
+  disponibleEn      DateTime              @map("disponible_en") @db.DateTime(3)
+  verificacion      VerificacionDominio   @relation(fields: [verificacionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  resultados        ResultadoComprobacion[]
+
+  @@index([verificacionId, creadoEn])
+  @@index([estado, disponibleEn])
+  @@index([estado, reclamoExpiraEn])
+  @@map("analisis")
+}
+
+model ResultadoComprobacion {
+  id                 String          @id @default(uuid()) @db.Char(36)
+  analisisId         String          @map("analisis_id") @db.Char(36)
+  codigoComprobacion String          @map("codigo_comprobacion") @db.VarChar(100)
+  estado             EstadoResultado
+  evidencia          Json?
+  observadoEn        DateTime?       @map("observado_en") @db.DateTime(3)
+  analisis           Analisis        @relation(fields: [analisisId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([analisisId, codigoComprobacion])
+  @@map("resultados_comprobacion")
+}
