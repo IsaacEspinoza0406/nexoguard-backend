@@ -1,0 +1,2 @@
+# Motor correspondiente al historial de migraciones Prisma.
+provider = "mysql"
