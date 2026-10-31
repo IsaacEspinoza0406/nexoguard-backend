@@ -8,6 +8,8 @@ Su objetivo general es ofrecer una plataforma que permita verificar el control d
 
 El backend utiliza Node.js, TypeScript y NestJS. Para persistencia se han configurado Prisma ORM 7.10.1, `@prisma/adapter-mariadb` y MySQL; Jest, ESLint y TypeScript proporcionan herramientas de validación. Docker prepara la imagen de ejecución local.
 
+El [frontend complementario](https://github.com/IsaacEspinoza0406/nexoguard-frontend) utiliza Next.js y consume la API de registro. El flujo desde el navegador hasta NestJS y MySQL se probó en el entorno Docker local con datos ficticios y limpieza posterior.
+
 La arquitectura separa presentación, aplicación, dominio e infraestructura. Existe un módulo de registro con caso de uso y repositorio Prisma; no hay otros casos de uso implementados. Prisma se registra mediante inyección de dependencias y gestiona conexión y cierre.
 
 ```text
@@ -15,12 +17,13 @@ src/
   app.module.ts                 Módulo raíz
   main.ts                       Arranque de NestJS
   infrastructure/prisma/        Módulo y servicio Prisma en desarrollo
+  users/                        Registro: presentación, aplicación, dominio e infraestructura
   generated/prisma/             Cliente generado, no versionado
 prisma/
   schema.prisma                 Modelo Prisma
   migrations/                   Migración inicial y metadatos
 docker/                         Ejecución controlada de migraciones
-test/                           Prueba inicial de NestJS
+test/                           Pruebas de la aplicación y del registro
 ```
 
 ## Base de datos y migraciones
@@ -55,10 +58,10 @@ La generación del cliente requiere una `DATABASE_URL` válida para la configura
 
 Hay una estructura inicial de NestJS, un modelo y migración Prisma, una imagen Docker y herramientas de validación. El registro está implementado de forma provisional y en validación; no hay inicio de sesión ni sesiones. Quedan previstos, entre otros, la gestión de usuarios y sesiones, sitios y verificación de dominio, análisis, resultados y alertas.
 
-## Registro de usuario (en validación)
+## Registro de usuario
 
 Para desarrollo local, `GET /users/registration-token` requiere `Origin: http://127.0.0.1:3000` y devuelve `{ "token": "..." }` y una cookie HttpOnly, SameSite Strict, con vigencia de diez minutos. El navegador debe solicitarlo con credenciales habilitadas y enviar la cookie y el token en `X-CSRF-Token` al hacer `POST /users`, junto con el mismo origen. El servidor comprueba por separado el origen, la coincidencia del token con la cookie, su firma y su vencimiento. La clave es temporal y los tokens dejan de ser válidos al reiniciar el proceso.
 
 El cuerpo acepta únicamente `email` y `password`. El correo válido de hasta 254 caracteres se recorta y normaliza a minúsculas; la contraseña requiere entre 12 y 128 caracteres. La respuesta prevista es `201` con `{ "id": "..." }`, sin contraseña ni hash. Los errores incluyen `400` por entrada inválida, `403` por origen o CSRF, `409` por duplicado, `429` por límite y `500` por fallo interno. No se crea una sesión.
 
-El límite provisional es de diez solicitudes de token y cinco registros por minuto y dirección IP; se almacena en memoria por proceso y se pierde al reiniciar. El origen está fijado al frontend local y la cookie no usa Secure en HTTP local; este mecanismo requiere revisión y configuración segura para HTTPS, proxy y múltiples instancias antes de producción. Se verificó el registro en MySQL local con datos ficticios y limpieza controlada; no existe integración del frontend todavía.
+El límite provisional es de diez solicitudes de token y cinco registros por minuto y dirección IP; se almacena en memoria por proceso y se pierde al reiniciar. El origen está fijado al frontend local y la cookie no usa Secure en HTTP local; este mecanismo requiere revisión y configuración segura para HTTPS, proxy y múltiples instancias antes de producción. El frontend ya consume estos endpoints y el flujo completo se verificó en Docker local con datos ficticios y limpieza controlada.
