@@ -4,8 +4,7 @@ import { Request, Response } from 'express';
 import { RegisterUserService } from '../application/register-user.service';
 import { RegisterDto } from './register.dto';
 import { createRegistrationToken, isValidRegistrationToken } from './registration-token';
-
-const allowedOrigin = 'http://127.0.0.1:3000';
+import { cookieOptions, httpSecurity, readCookie } from '../../security/http-security';
 
 @Controller('users')
 @UseGuards(ThrottlerGuard)
@@ -16,9 +15,9 @@ export class RegistrationController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Header('Cache-Control', 'no-store')
   token(@Req() request: Request, @Res({ passthrough: true }) response: Response): { token: string } {
-    if (request.get('origin') !== allowedOrigin) throw new ForbiddenException();
+    if (request.get('origin') !== httpSecurity().origin) throw new ForbiddenException();
     const token = createRegistrationToken();
-    response.cookie('registration_csrf', token, { httpOnly: true, sameSite: 'strict', path: '/users', maxAge: 600000 });
+    response.cookie('registration_csrf', token, { ...cookieOptions('/users'), maxAge: 600000 });
     return { token };
   }
 
@@ -26,8 +25,8 @@ export class RegistrationController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async register(@Body() body: RegisterDto, @Req() request: Request): Promise<{ id: string }> {
     const header = request.get('x-csrf-token') || '';
-    const cookie = (request.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith('registration_csrf='))?.slice('registration_csrf='.length) || '';
-    if (request.get('origin') !== allowedOrigin || !isValidRegistrationToken(header, cookie)) throw new ForbiddenException();
+    const cookie = readCookie(request, 'registration_csrf');
+    if (request.get('origin') !== httpSecurity().origin || !isValidRegistrationToken(header, cookie)) throw new ForbiddenException();
     return this.registration.register(body.email, body.password);
   }
 }
