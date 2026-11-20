@@ -17,6 +17,7 @@ model Usuario {
   creadoEn          DateTime  @default(now()) @map("creado_en") @db.DateTime(3)
   sesiones          Sesion[]
   sitios            Sitio[]
+  programaciones    ProgramacionAnalisis[]
 
   @@map("usuarios")
 }
@@ -44,6 +45,7 @@ model Sitio {
   propietario      Usuario           @relation(fields: [propietarioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   revisiones       RevisionDominio[] @relation("Historial")
   revisionActual   RevisionDominio?  @relation("Actual", fields: [revisionActualId, id, dominioCanonico], references: [id, sitioId, dominioCanonico], onDelete: Restrict, onUpdate: Restrict)
+  programacion     ProgramacionAnalisis?
 
   @@unique([propietarioId, dominioCanonico])
   @@unique([revisionActualId, id, dominioCanonico])
@@ -59,6 +61,7 @@ model RevisionDominio {
   sitio           Sitio                 @relation("Historial", fields: [sitioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   actualPara      Sitio?                @relation("Actual")
   verificaciones  VerificacionDominio[]
+  programaciones  ProgramacionAnalisis[]
 
   @@unique([sitioId, numeroRevision])
   @@unique([id, sitioId, dominioCanonico])
@@ -110,6 +113,8 @@ model Analisis {
   disponibleEn      DateTime              @map("disponible_en") @db.DateTime(3)
   verificacion      VerificacionDominio   @relation(fields: [verificacionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   resultados        ResultadoComprobacion[]
+  programadoPara    DateTime?              @map("programado_para") @db.DateTime(3)
+  alertas           Alerta[]
 
   @@index([verificacionId, creadoEn])
   @@index([estado, disponibleEn])
@@ -128,4 +133,48 @@ model ResultadoComprobacion {
 
   @@unique([analisisId, codigoComprobacion])
   @@map("resultados_comprobacion")
+}
+
+model ProgramacionAnalisis {
+  sitioId               String          @id @map("sitio_id") @db.Char(36)
+  revisionDominioId      String          @map("revision_dominio_id") @db.Char(36)
+  configuradoPorId       String          @map("configurado_por_id") @db.Char(36)
+  intervaloMinutos       Int             @map("intervalo_minutos") @db.UnsignedInt
+  activa                Boolean         @default(false)
+  proximaEjecucionEn     DateTime?       @map("proxima_ejecucion_en") @db.DateTime(3)
+  ultimoEstado          String          @map("ultimo_estado") @db.VarChar(50)
+  actualizadoEn         DateTime        @map("actualizado_en") @db.DateTime(3)
+  sitio                 Sitio           @relation(fields: [sitioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisionDominio       RevisionDominio @relation(fields: [revisionDominioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  configuradoPor        Usuario         @relation(fields: [configuradoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([activa, proximaEjecucionEn])
+  @@index([revisionDominioId])
+  @@index([configuradoPorId])
+  @@map("programaciones_analisis")
+}
+
+model Alerta {
+  id                   String    @id @default(uuid()) @db.Char(36)
+  analisisId           String    @map("analisis_id") @db.Char(36)
+  codigoComprobacion   String    @map("codigo_comprobacion") @db.VarChar(100)
+  tipo                 String    @db.VarChar(50)
+  claveDeduplicacion   String    @unique @map("clave_deduplicacion") @db.Char(64)
+  detalle              Json
+  creadoEn             DateTime  @default(now()) @map("creado_en") @db.DateTime(3)
+  leidaEn              DateTime? @map("leida_en") @db.DateTime(3)
+  analisis             Analisis  @relation(fields: [analisisId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([analisisId, creadoEn])
+  @@map("alertas")
+}
+
+// Shared provider gate; no credentials or user data are stored here.
+model ProveedorExterno {
+  id                    String    @id @db.VarChar(32)
+  siguienteSolicitudEn   DateTime  @map("siguiente_solicitud_en") @db.DateTime(3)
+  reclamoExpiraEn        DateTime? @map("reclamo_expira_en") @db.DateTime(3)
+  version               Int       @default(0) @db.UnsignedInt
+
+  @@map("proveedores_externos")
 }
