@@ -21,7 +21,16 @@ function localDatabaseUrl(): string {
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    super({ adapter: new PrismaMariaDb(localDatabaseUrl()) });
+    const url = new URL(localDatabaseUrl());
+    super({ adapter: new PrismaMariaDb({
+      host: url.hostname,
+      port: Number(url.port),
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: url.pathname.slice(1),
+      cachingRsaPublicKey: process.env.NEXOGUARD_DB_PUBLIC_KEY_FILE,
+      allowPublicKeyRetrieval: false,
+    }) });
   }
 
   async onModuleInit(): Promise<void> {
