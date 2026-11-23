@@ -1,0 +1,27 @@
+-- Metadata and counts only; no emails, hashes, tokens or individual IDs.
+SELECT 'tables', COUNT(*) FROM information_schema.tables WHERE table_schema='nexoguard';
+SELECT table_name,column_name,column_type,is_nullable,COALESCE(column_default,'NULL'),COALESCE(collation_name,''),extra FROM information_schema.columns WHERE table_schema='nexoguard' ORDER BY table_name,ordinal_position;
+SELECT table_name,index_name,non_unique,seq_in_index,column_name FROM information_schema.statistics WHERE table_schema='nexoguard' ORDER BY table_name,index_name,seq_in_index;
+SELECT table_name,constraint_name,column_name,referenced_table_name,referenced_column_name FROM information_schema.key_column_usage WHERE table_schema='nexoguard' AND referenced_table_name IS NOT NULL ORDER BY table_name,constraint_name,ordinal_position;
+SELECT 'migrations',migration_name,finished_at IS NOT NULL,rolled_back_at IS NULL FROM _prisma_migrations ORDER BY migration_name;
+SELECT 'usuarios',COUNT(*) FROM usuarios;
+SELECT 'sesiones',COUNT(*) FROM sesiones;
+SELECT 'sitios',COUNT(*) FROM sitios;
+SELECT 'revisiones_dominio',COUNT(*) FROM revisiones_dominio;
+SELECT 'verificaciones_dominio',COUNT(*) FROM verificaciones_dominio;
+SELECT 'analisis',COUNT(*) FROM analisis;
+SELECT 'resultados_comprobacion',COUNT(*) FROM resultados_comprobacion;
+SELECT 'programaciones_analisis',COUNT(*) FROM programaciones_analisis;
+SELECT 'alertas',COUNT(*) FROM alertas;
+SELECT 'proveedores_externos',COUNT(*) FROM proveedores_externos;
+SELECT 'orphan_sessions',COUNT(*) FROM sesiones s LEFT JOIN usuarios u ON u.id=s.usuario_id WHERE s.usuario_id IS NOT NULL AND u.id IS NULL;
+SELECT 'orphan_sites',COUNT(*) FROM sitios s LEFT JOIN usuarios u ON u.id=s.propietario_id WHERE u.id IS NULL;
+SELECT 'orphan_current_revision',COUNT(*) FROM sitios s LEFT JOIN revisiones_dominio r ON r.id=s.revision_actual_id AND r.sitio_id=s.id AND r.dominio_canonico=s.dominio_canonico WHERE s.revision_actual_id IS NOT NULL AND r.id IS NULL;
+SELECT 'orphan_revisions',COUNT(*) FROM revisiones_dominio r LEFT JOIN sitios s ON s.id=r.sitio_id WHERE s.id IS NULL;
+SELECT 'orphan_verifications',COUNT(*) FROM verificaciones_dominio v LEFT JOIN revisiones_dominio r ON r.id=v.revision_dominio_id WHERE r.id IS NULL;
+SELECT 'orphan_analyses',COUNT(*) FROM analisis a LEFT JOIN verificaciones_dominio v ON v.id=a.verificacion_id WHERE v.id IS NULL;
+SELECT 'orphan_results',COUNT(*) FROM resultados_comprobacion r LEFT JOIN analisis a ON a.id=r.analisis_id WHERE a.id IS NULL;
+SELECT 'orphan_schedule_site',COUNT(*) FROM programaciones_analisis p LEFT JOIN sitios s ON s.id=p.sitio_id WHERE s.id IS NULL;
+SELECT 'orphan_schedule_revision',COUNT(*) FROM programaciones_analisis p LEFT JOIN revisiones_dominio r ON r.id=p.revision_dominio_id WHERE r.id IS NULL;
+SELECT 'orphan_schedule_user',COUNT(*) FROM programaciones_analisis p LEFT JOIN usuarios u ON u.id=p.configurado_por_id WHERE u.id IS NULL;
+SELECT 'orphan_alerts',COUNT(*) FROM alertas p LEFT JOIN analisis a ON a.id=p.analisis_id WHERE a.id IS NULL;
