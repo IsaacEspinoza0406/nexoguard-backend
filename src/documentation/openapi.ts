@@ -94,7 +94,7 @@ export function createApiDocument(app: INestApplication): OpenAPIObject {
     operation.summary = contract.summary;
     operation.description = `${contract.description} Límite: ${contract.limit} solicitudes/minuto/IP/ruta.`;
     operation.parameters = [...contract.path.matchAll(/\{(\w+)\}/g)].map(match => ({ name: match[1], in: 'path' as const, required: true, schema: uuid }));
-    if (contract.csrf || contract.origin) operation.parameters.push({ name: 'Origin', in: 'header', required: true, schema: { type: 'string', format: 'uri' }, description: 'Debe ser exactamente el origen frontend permitido. En local: http://127.0.0.1:3000. El navegador lo gestiona; no se amplía CORS para Swagger.' });
+    if (contract.csrf || contract.origin) operation.parameters.push({ name: 'Origin', in: 'header', required: !!contract.csrf, schema: { type: 'string', format: 'uri' }, description: contract.csrf ? 'Obligatorio: exactamente el origen frontend permitido; además de cookie y token CSRF.' : 'Obligatorio en local. En producción, GET sin Origin solo se admite con Sec-Fetch-Site=same-origin y Host exacto al origen configurado. Un Origin explícito debe coincidir siempre.' });
     const requirements: Record<string, string[]> = {};
     if (contract.auth) requirements.session = [];
     if (contract.csrf) { requirements.csrfToken = []; requirements[contract.csrf === 'registration' ? 'registrationCsrfCookie' : 'authCsrfCookie'] = []; }

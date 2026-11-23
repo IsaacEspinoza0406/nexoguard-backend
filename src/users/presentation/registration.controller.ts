@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 import { RegisterUserService } from '../application/register-user.service';
 import { RegisterDto } from './register.dto';
 import { createRegistrationToken, isValidRegistrationToken } from './registration-token';
-import { cookieOptions, httpSecurity, readCookie } from '../../security/http-security';
+import { cookieOptions, httpSecurity, readCookie, trustedTokenRequest } from '../../security/http-security';
 
 @Controller('users')
 @UseGuards(ThrottlerGuard)
@@ -15,7 +15,7 @@ export class RegistrationController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Header('Cache-Control', 'no-store')
   token(@Req() request: Request, @Res({ passthrough: true }) response: Response): { token: string } {
-    if (request.get('origin') !== httpSecurity().origin) throw new ForbiddenException();
+    if (!trustedTokenRequest(request)) throw new ForbiddenException();
     const token = createRegistrationToken();
     response.cookie('registration_csrf', token, { ...cookieOptions('/users'), maxAge: 600000 });
     return { token };

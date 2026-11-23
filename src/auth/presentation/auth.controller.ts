@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { RegisterDto } from '../../users/presentation/register.dto';
 import { createRegistrationToken, isValidRegistrationToken } from '../../users/presentation/registration-token';
-import { cookieOptions, httpSecurity, readCookie } from '../../security/http-security';
+import { cookieOptions, httpSecurity, readCookie, trustedTokenRequest } from '../../security/http-security';
 import { AuthService } from '../application/auth.service';
 import { sessionDurations } from '../domain/session';
 import { AuthenticatedRequest, SessionGuard } from './session.guard';
@@ -24,7 +24,7 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   csrf(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const config = httpSecurity();
-    if (request.get('origin') !== config.origin) throw new ForbiddenException();
+    if (!trustedTokenRequest(request)) throw new ForbiddenException();
     const token = createRegistrationToken(this.binding(request));
     response.cookie(config.csrfCookie, token, { ...cookieOptions(), maxAge: 600000 });
     return { token };

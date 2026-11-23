@@ -64,6 +64,8 @@ it('genera las veinte operaciones reales con respuestas, errores y todas las ref
 it('describe DTO estrictos, contraseñas solo de entrada y CSRF con condiciones AND', () => {
   const doc = createApiDocument(app);
   expect(doc.paths['/auth/login'].post?.security).toEqual([{ csrfToken: [], authCsrfCookie: [] }]);
+  expect(doc.paths['/auth/login'].post?.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Origin', required: true })]));
+  expect(doc.paths['/auth/csrf'].get?.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Origin', required: false, description: expect.stringContaining('Sec-Fetch-Site=same-origin') })]));
   expect(doc.paths['/users'].post?.security).toEqual([{ csrfToken: [], registrationCsrfCookie: [] }]);
   expect(doc.paths['/sites/{siteId}/ssl-labs'].post?.security).toEqual([{ session: [], csrfToken: [], authCsrfCookie: [] }]);
   expect(doc.paths['/sites/{siteId}/ssl-labs'].get?.security).toEqual([{ session: [] }]);
