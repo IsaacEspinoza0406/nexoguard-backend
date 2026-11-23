@@ -11,7 +11,7 @@ export function certificateChecks(cert: CertificateObservation, now = Date.now()
   const dated = Number.isFinite(from) && Number.isFinite(to);
   return [
     check('CERTIFICATE', cert.trusted && cert.identity ? 'APROBADO' : 'HALLAZGO', { trusted: cert.trusted, identityMatches: cert.identity }, 'Instala una cadena de confianza completa y un certificado emitido para el dominio. Comprueba el nombre y la cadena con un cliente TLS.'),
-    dated ? check('CERTIFICATE_EXPIRY', from <= now && now < to ? 'APROBADO' : 'HALLAZGO', { validFrom: cert.validFrom, validTo: cert.validTo, daysRemaining: Math.floor((to - now) / 86400000) }, 'Renueva el certificado antes de su vencimiento y verifica las fechas tras instalarlo. No se generan alertas automáticas en esta etapa.') : unavailable('CERTIFICATE_EXPIRY', 'No se obtuvieron fechas válidas del certificado.'),
+    dated ? check('CERTIFICATE_EXPIRY', from <= now && now < to ? 'APROBADO' : 'HALLAZGO', { validFrom: cert.validFrom, validTo: cert.validTo, daysRemaining: Math.floor((to - now) / 86400000) }, 'Renueva el certificado antes de su vencimiento y verifica las fechas tras instalarlo. Los avisos de proximidad utilizan la ventana de monitoreo configurada y las observaciones de cada análisis.') : unavailable('CERTIFICATE_EXPIRY', 'No se obtuvieron fechas válidas del certificado.'),
   ];
 }
 

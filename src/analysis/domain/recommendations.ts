@@ -27,7 +27,7 @@ const entries: Record<typeof codes[number], Omit<Guidance, 'version'>> = {
   CERTIFICATE_EXPIRY: {
     explanation: 'El instante observado debe estar dentro del intervalo de validez del certificado.',
     consequence: 'Un certificado vencido o todavía no válido provoca rechazos de conexión en clientes que verifican TLS.',
-    applicability: 'Solo cuando se obtuvieron fechas interpretables. Los días restantes son informativos, sin umbral de alerta aprobado.',
+    applicability: 'Solo cuando se obtuvieron fechas interpretables. El estado evalúa la vigencia actual; el aviso de proximidad usa la ventana configurada de monitoreo (30 días inicialmente) y los certificados observados en cada análisis.',
     correctiveAction: 'Renueva e instala el certificado vigente y revisa la automatización de su renovación.',
     verification: 'Comprueba notBefore y notAfter del certificado servido y repite el análisis después de instalarlo.',
   },
