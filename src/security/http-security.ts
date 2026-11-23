@@ -1,4 +1,10 @@
-import { CookieOptions, Request } from 'express';
+import { CookieOptions, Request, RequestHandler } from 'express';
+
+export const securityHeaders: RequestHandler = (_request, response, next) => {
+  response.removeHeader('X-Powered-By');
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+};
 
 export function httpSecurity() {
   const mode = process.env.NEXOGUARD_HTTP_MODE || (process.env.NODE_ENV === 'production' ? 'production' : 'local');
@@ -12,6 +18,16 @@ export function httpSecurity() {
 
 export function cookieOptions(path = '/'): CookieOptions {
   return { httpOnly: true, secure: httpSecurity().production, sameSite: 'strict', path };
+}
+
+// GET token issuance only. Browser same-origin GETs can omit Origin.
+// Mutations must still validate Origin AND the session-bound CSRF token/cookie.
+export function trustedTokenRequest(request: Request): boolean {
+  const config = httpSecurity();
+  const origin = request.get('origin');
+  if (origin !== undefined) return origin === config.origin;
+  return config.production && request.get('sec-fetch-site') === 'same-origin' &&
+    request.get('host') === new URL(config.origin).host;
 }
 
 export function readCookie(request: Request, name: string): string {
