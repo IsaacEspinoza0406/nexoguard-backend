@@ -154,3 +154,9 @@ Producción exige transporte separado (`NEXOGUARD_TRANSPORT_MODE=remote`) con RP
 - La recuperación de contraseña desde la interfaz, la gestión administrativa de roles y una certificación de accesibilidad no se presentan como funcionalidades completadas.
 - Antes de futuras migraciones deben revisarse la identidad independiente, el destino y los permisos. La configuración local no debe trasladarse sin cambios a producción; el despliegue académico no equivale a una auditoría integral de seguridad.
 - **La alerta de Google Safe Browsing sigue pendiente.** Se envió un reporte de posible clasificación incorrecta; no equivale a una resolución ni a una revisión aprobada de Search Console. HTTPS y los cambios visuales no resuelven por sí solos esa alerta. No se recomienda ignorarla ni desactivar protecciones.
+
+## Licencia
+
+El código original de NexoGuard se distribuye bajo [Apache License 2.0](./LICENSE).
+Copyright 2026 Héctor Isaac Espinoza Mendoza. Consulte también [NOTICE](./NOTICE).
+Las dependencias y los componentes de terceros conservan sus respectivos avisos y licencias.
