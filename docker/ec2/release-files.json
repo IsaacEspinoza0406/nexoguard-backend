@@ -1,0 +1,123 @@
+{
+  "release": "tls-practical-20261127-r2",
+  "repositories": {
+    "back": [
+      {
+        "message": "fix: corrige Effect y separa dependencias de runtime y herramientas",
+        "files": [
+          "package.json",
+          "package-lock.json",
+          "Dockerfile",
+          "test/prisma-toolchain.check.cjs",
+          "test/runtime-dependencies.check.cjs",
+          "docker/ec2/DEPENDENCIES.md"
+        ]
+      },
+      {
+        "message": "feat: agrega guías prácticas versionadas para doce comprobaciones",
+        "files": [
+          "src/analysis/domain/practical-guides.ts",
+          "src/analysis/domain/recommendations.ts",
+          "src/documentation/openapi.ts",
+          "test/practical-guides.spec.ts",
+          "test/practical-ui.fixture.mjs",
+          "test/practical-ui.browser.mjs"
+        ]
+      },
+      {
+        "message": "feat: cifra los saltos internos con CA y nombres validados",
+        "files": [
+          "src/main.ts",
+          "src/security/internal-tls.ts",
+          "test/internal-tls-config.spec.ts",
+          "test/tls-network.spec.ts",
+          "test/ec2-https.integration.mjs",
+          "test/internal-proxy-negative.integration.mjs",
+          "docker/ec2/.env.example",
+          "docker/ec2/compose.tls.example.yaml",
+          "docker/ec2/compose.internal-tls.yaml",
+          "docker/ec2/generate-internal-tls.sh"
+        ]
+      },
+      {
+        "message": "ops: automatiza renovación TLS con diario y reversión comprobada",
+        "files": [
+          "docker/ec2/renew-internal-tls.py",
+          "docker/ec2/verify-internal-tls.mjs",
+          "docker/ec2/nexoguard-internal-tls.service",
+          "docker/ec2/nexoguard-internal-tls.timer",
+          "docker/ec2/nexoguard.service.internal-tls.conf",
+          "test/Dockerfile.tls-operations",
+          "test/internal-tls-renewal.integration.py",
+          "test/run-internal-tls-renewal.py",
+          "test/internal-tls-renewal-policy.check.py"
+        ]
+      },
+      {
+        "message": "docs: prepara publicación y despliegue r2 con evidencias y reversión",
+        "files": [
+          "README.md",
+          "docker/ec2/INTERNAL_TLS.md",
+          "docker/ec2/RENEWAL.md",
+          "docker/ec2/VALIDATION.md",
+          "docker/ec2/PUBLICACION.md",
+          "docker/ec2/release-files.json",
+          "docker/ec2/package-update.ps1"
+        ]
+      }
+    ],
+    "front": [
+      {
+        "message": "feat: presenta ejemplos orientativos accesibles y copia de correcciones",
+        "files": [
+          "src/app/cuenta/practical-guide.tsx",
+          "src/app/cuenta/practical-guide.test.tsx",
+          "src/app/cuenta/analysis-comparison.tsx",
+          "src/app/cuenta/analysis-comparison.test.tsx",
+          "src/app/cuenta/analysis-panel.tsx",
+          "src/app/globals.css"
+        ]
+      },
+      {
+        "message": "feat: sirve Next por HTTPS y valida TLS en proxy y SSR",
+        "files": [
+          "Dockerfile",
+          "server.mjs",
+          ".env.example",
+          "docker/ec2/entrypoint.sh",
+          "docker/ec2/tls.conf.template",
+          "src/app/cuenta/page.tsx"
+        ]
+      },
+      {
+        "message": "docs: explica TLS interno preparado y guías prácticas",
+        "files": [
+          "README.md"
+        ]
+      }
+    ]
+  },
+  "operationalFiles": [
+    "compose.yaml",
+    "deploy/ec2/test/compose.internal-tls.local.yaml",
+    "deploy/ec2/export-recovery.sh"
+  ],
+  "configFiles": [
+    "back/docker/ec2/compose.internal-tls.yaml",
+    "back/docker/ec2/generate-internal-tls.sh",
+    "back/docker/ec2/renew-internal-tls.py",
+    "back/docker/ec2/verify-internal-tls.mjs",
+    "back/docker/ec2/nexoguard-internal-tls.service",
+    "back/docker/ec2/nexoguard-internal-tls.timer",
+    "back/docker/ec2/nexoguard.service.internal-tls.conf",
+    "back/docker/ec2/INTERNAL_TLS.md",
+    "back/docker/ec2/RENEWAL.md",
+    "back/docker/ec2/DEPENDENCIES.md",
+    "back/docker/ec2/VALIDATION.md",
+    "back/docker/ec2/PUBLICACION.md",
+    "back/docker/ec2/release-files.json",
+    "front/docker/ec2/tls.conf.template",
+    "front/docker/ec2/entrypoint.sh",
+    "deploy/ec2/export-recovery.sh"
+  ]
+}

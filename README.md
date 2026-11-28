@@ -55,52 +55,33 @@ test/                          Pruebas de integración y soporte
 
 El modelo tiene diez tablas de aplicación: usuarios, sesiones, sitios, revisiones y verificaciones de dominio, análisis, resultados de comprobación, programaciones, alertas y coordinación del proveedor externo. Prisma mantiene además sus metadatos de migraciones.
 
-## TLS: implementación, alcance y verificación
+## TLS: implementación y alcance
 
-La observación «TLS deshabilitado» no describe todas las conexiones del sistema. Hay terminación HTTPS en Nginx y clientes TLS estrictos para MySQL, RPC, propiedad y SSL Labs; también existen tramos HTTP internos y una excepción diagnóstica real que se explica por separado. No se declara cifrado de extremo a extremo entre todos los contenedores.
+La versión preparada incorpora HTTPS en los saltos Nginx → Next.js, Nginx → NestJS y Next.js SSR → NestJS, con CA web independiente y SAN `front`/`back`. **No se ha desplegado esta actualización en EC2**: no se debe confundir el HTTPS público existente con los saltos internos de la versión anterior, que utilizaban HTTP.
 
-| Conexión | Configuración de producción revisada | Alcance y validación |
+| Conexión | Versión preparada | Validación |
 | --- | --- | --- |
-| Navegador → Nginx | HTTPS público; TLS 1.2/1.3 y certificado de Let's Encrypt | Nginx termina TLS. El puerto 80 redirige a HTTPS, salvo ACME y salud. |
-| Nginx → Next.js / NestJS | HTTP en la red Docker interna de la misma EC2 | No hay TLS en estos saltos. Pueden transportar formularios y cookies dentro del host; la red interna limita alcance, no cifra. No deben exponerse ni trasladarse a hosts distintos sin proteger el canal. |
-| Next.js SSR → NestJS | `http://back:3001` en la misma red interna | La comprobación de sesión es HTTP interno; la URL del navegador sigue siendo `/api` sobre HTTPS. |
-| NestJS → MySQL | `production_tls`, CA propia, nombre esperado y mínimo TLS 1.2 | El cliente exige `rejectUnauthorized: true` y `checkServerIdentity`; el servidor exige transporte seguro en conexiones TCP. |
-| NestJS → transporte | HTTPS con CA y nombre del servicio | RPC autenticado. La selección EC2 configura `NEXOGUARD_TRANSPORT_PRIVATE_HTTP=false`. |
-| Transporte → SSL Labs | HTTPS a la API v4; CA de confianza del runtime y nombre del proveedor | Validación estricta, sin redirecciones y con resolución fijada. No se llamó al proveedor en esta revisión. |
-| Transporte → archivo de propiedad | HTTPS:443, CA y nombre del dominio | No se admiten redirecciones ni certificados inválidos. |
-| Transporte → página HTTPS analizada | HTTPS, CA y nombre del dominio | Las descargas de contenido conservan validación estricta y no envían credenciales del usuario. |
-| Prueba de redirección del sitio | HTTP anónimo al puerto 80 | Es una comprobación explícita de HTTP → HTTPS, sin cookies ni autorización. No equivale a una conexión TLS. |
-| Diagnóstico del certificado | Handshake TLS sin descargar contenido | Excepción acotada: observa certificados inválidos como hallazgo; no autentica una respuesta HTTP. |
+| Navegador → Nginx | HTTPS público; HTTP redirige salvo ACME/salud | Certificado público, TLS 1.2/1.3 |
+| Nginx → Next.js / NestJS | HTTPS interno | CA web, SNI y nombre explícitos; fallo cerrado |
+| Next.js SSR → NestJS | `https://back:3001` | CA adicional al arrancar Node y nombre de servidor |
+| NestJS → MySQL | TLS, CA propia y nombre esperado | `production_tls`, identidad y transporte seguro |
+| NestJS → transporte | HTTPS autenticado | CA y nombre; HTTP privado desactivado en EC2 |
+| Transporte → servicios HTTPS | TLS estricto | CA, nombre, DNS fijado y límites de red |
+| Prueba anónima HTTP del sitio | HTTP:80 intencional | Solo evalúa redirección, sin cookies ni credenciales |
 
-### Excepción diagnóstica: no confundir observación con confianza
+[internal-tls.ts](./src/security/internal-tls.ts) configura HTTPS nativo en NestJS y bloquea producción sin certificado/clave. La CA privada web nunca se monta en la aplicación. El [ejemplo Compose](./docker/ec2/compose.tls.example.yaml) incluye los nuevos montajes y healthchecks HTTPS. El [overlay para EC2 existente](./docker/ec2/compose.internal-tls.yaml) selecciona backend, frontend, gateway y transporte corregidos; la imagen de migración permanece como herramienta explícita, sin iniciarla.
 
-En [AnalysisNetwork.certificate](./src/analysis/infrastructure/analysis-network.ts) permanece `rejectUnauthorized: false` **solo en el socket de diagnóstico**. Suprimirlo impediría obtener evidencia de certificados no confiables o vencidos; cambiar el texto para ocultarlo al analizador no corrige el problema. El destino se valida y fija, se conserva SNI, se consulta `socket.authorized` y se comprueba el nombre con `checkServerIdentity`. No se envían HTTP, cookies, contraseñas ni datos de aplicación por ese socket y se cierra tras leer el certificado.
+El [procedimiento completo](./docker/ec2/INTERNAL_TLS.md) describe generación privada, permisos, SAN, renovación, imágenes, respaldo cifrado, despliegue manual y reversión sin migraciones ni cambios de datos. Mantiene MySQL y sus datos intactos; conserva la configuración TLS/RPC del transporte al actualizar su imagen. La [renovación automática preparada](./docker/ec2/RENEWAL.md) usa systemd, hojas de 90 días y margen de 30 días, con validación, diario y reversión. Aún no está instalada en EC2; no se confunde con ACME público. La [corrección compatible de Effect y separación del runtime](./docker/ec2/DEPENDENCIES.md) elimina los tres avisos altos observados en la nueva entrega; quedan 18 moderados de desarrollo, sin afirmar una auditoría completa.
 
-[ManualEngine](./src/analysis/application/manual-engine.ts) convierte la falta de confianza o identidad en hallazgo y no descarga la página HTTPS en ese caso. Cada descarga posterior vuelve a validar TLS. Un certificado observado no se presenta como un certificado confiable. Las pruebas nuevas comprueban tanto resultados positivos como CA no confiable y nombre incorrecto, contando cero solicitudes HTTP y cero bytes de aplicación en el diagnóstico.
+### Diagnóstico de certificados del analizador
 
-### Configuración pública que permite revisar la topología
+[AnalysisNetwork](./src/analysis/infrastructure/analysis-network.ts) conserva una excepción limitada al handshake diagnóstico para observar certificados inválidos como hallazgos. Comprueba por separado identidad/confianza y no envía solicitudes HTTP, cookies, autorización ni datos de aplicación en ese handshake. [ManualEngine](./src/analysis/application/manual-engine.ts) no descarga contenido HTTPS cuando la confianza o identidad fallan; las descargas posteriores siempre validan TLS. No es una desactivación para tráfico de aplicación ni un falso positivo genérico.
 
-- [Ejemplo Compose EC2](./docker/ec2/compose.tls.example.yaml) y [variables de ejemplo](./docker/ec2/.env.example): selección revisada de los cinco servicios de ejecución, redes, TLS de MySQL/RPC y montajes de solo lectura. No incluye trabajos administrativos, secretos ni una copia del paquete operativo privado. El gateway exige `TLS_ENABLED=true`; falla si no existen sus certificados.
-- [Configuración TLS de MySQL](./src/infrastructure/prisma/database-config.ts) y [arranque de MySQL](./docker/mysql-entrypoint.sh): CA, nombre y `--require-secure-transport=ON`.
-- [Cliente RPC](./src/transport/client.ts), [servidor del transporte](./src/transport/main.ts) y [firewall](./docker/transport-entrypoint.sh): transporte separado, certificados y límites de salida. La opción HTTP explícita conservada para pruebas o malla privada cifrada no se usa en la selección EC2 y no equivale a TLS por sí sola.
-- Las plantillas reales de Nginx están en el [repositorio frontend](https://github.com/IsaacEspinoza0406/nexoguard-frontend), dentro de `docker/ec2/`; ya forman parte de ese repositorio. `TLS_ENABLED=false` selecciona únicamente el arranque ACME: responde 503 para la aplicación y no sirve login por HTTP.
+### Guías prácticas
 
-El ejemplo usa imágenes precompiladas, rutas y rangos ficticios. Requiere revisar imágenes, subredes, CA y certificados con SAN `db` y `transport`, permisos de los archivos y variables privadas antes de utilizarlo. El archivo privado de inicialización MySQL debe aprovisionar las identidades separadas y permisos mínimos; no se incluye en el código. No aplicar este ejemplo sobre un volumen existente ni inferir que crea cuentas o aplica migraciones. La renovación del certificado y el inicio tras reiniciar el host siguen siendo tareas del entorno operativo, no del ejemplo Compose.
+El catálogo `practical-v1` de [practical-guides.ts](./src/analysis/domain/practical-guides.ts) cubre las doce comprobaciones con ubicaciones orientativas, ejemplos o procedimientos, cautelas y verificación. Complementa `catalog-v1`, sin cambiar reglas `manual-v1`, evidencia, fechas ni resultados históricos. La tecnología la elige el usuario. Los ejemplos HSTS de 300 segundos y las cookies `nexoguard_demo` son de laboratorio. CSP requiere revisión contextual; una plantilla Report-Only no equivale a una política aplicada ni a una comprobación aprobada.
 
-### Comprobaciones realizadas el 27 de noviembre de 2026
-
-- La URL pública de NexoGuard respondió 200 con TLS 1.3 y certificado validado por el cliente; HTTP respondió 308 hacia HTTPS. Solo se consultó la pantalla de acceso, sin análisis externos ni cuentas.
-- La plantilla real del frontend aprobó `nginx -t` con certificados efímeros, en un contenedor sin red ni puertos publicados. El modelo Compose público aprobó `docker compose config --quiet` con valores ficticios; no se arrancó esa topología.
-- Ocho pruebas nuevas realizan conexiones TLS locales reales para HTTPS, RPC, diagnóstico y opciones TLS generadas para MySQL. Estas últimas comprueban las opciones con un servidor TLS controlado: **no son una autenticación ni una sesión MySQL real**. Las 44 pruebas existentes seleccionadas de análisis, transporte y configuración también aprobaron. Tipos y lint de los archivos afectados aprobaron.
-- SSH a EC2 agotó el tiempo de espera. Por ello esta revisión no acredita el cifrado de una sesión MySQL/RPC interna actual en EC2; esa comprobación operativa queda pendiente. No se cambiaron reglas de red, certificados ni servicios remotos.
-
-Para repetir las pruebas TLS se necesitan Node.js 24.5 o posterior (la imagen usa 24.22.2) y OpenSSL 3 disponible en `PATH`; puede indicarse otro ejecutable mediante `NEXOGUARD_TEST_OPENSSL`. Las claves de prueba son efímeras y se eliminan al terminar. Su configuración OpenSSL es propia y no altera la del sistema.
-
-```powershell
-npm run test -- --runTestsByPath test/tls-network.spec.ts test/analysis.spec.ts test/production-config.spec.ts test/transport.spec.ts
-```
-
-No se encontró una desactivación injustificada en las conexiones de datos de la configuración de producción revisada. La excepción diagnóstica no se ha eliminado ni se declara un falso positivo genérico. Los tramos HTTP internos están identificados y siguen sin TLS. Si se exige cifrado entre todos los contenedores, será necesario un cambio de infraestructura separado, con validación y reversión antes de aplicarlo.
+Las pruebas [TLS de red](./test/tls-network.spec.ts) necesitan Node 24.5+ y OpenSSL 3; `NEXOGUARD_TEST_OPENSSL` permite indicar el ejecutable. [ec2-https.integration.mjs](./test/ec2-https.integration.mjs) solo debe ejecutarse con la fixture aislada: registra cuentas ficticias y escribe en su MySQL nuevo. No utilizarlo contra producción. La fixture visual [practical-ui.fixture.mjs](./test/practical-ui.fixture.mjs) usa datos simulados y no prueba persistencia ni seguridad TLS.
 
 ## Requisitos y configuración local
 
