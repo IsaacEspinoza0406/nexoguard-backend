@@ -10,12 +10,13 @@ import { setupSwagger } from './documentation/openapi';
 import { securityEvents } from './security/security-events';
 import { listenerConfig } from './security/listener-config';
 import { PrismaService } from './infrastructure/prisma/prisma.service';
+import { internalTls } from './security/internal-tls';
 
 async function bootstrap(): Promise<void> {
   const security = httpSecurity();
   validateCsrfConfiguration();
   sessionDurations();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { httpsOptions: internalTls(security.production) });
   const listener = listenerConfig();
   const server = app.getHttpAdapter().getInstance() as import('express').Express;
   server.set('trust proxy', listener.trustProxy);

@@ -1,0 +1,39 @@
+# Overlay for the EXISTING EC2 compose.production.yaml (same project and env files).
+# Initial r2 deployment also replaces transport dependencies; never change DB/CA.
+# Certificate renewal recreates back/front/gateway ONLY; transport remains untouched.
+services:
+  back:
+    image: nexoguard-ec2-back:${TLS_RELEASE_TAG:-tls-practical-20261127-r2}
+    environment:
+      NEXOGUARD_INTERNAL_TLS_CERT: /run/internal-tls/back.pem
+      NEXOGUARD_INTERNAL_TLS_KEY: /run/internal-tls/back.key
+      NODE_EXTRA_CA_CERTS: /run/internal-tls/ca.pem
+    volumes:
+      - ${INTERNAL_TLS_DIR:?private TLS bundle required}/ca.pem:/run/internal-tls/ca.pem:ro
+      - ${INTERNAL_TLS_DIR}/back.pem:/run/internal-tls/back.pem:ro
+      - ${INTERNAL_TLS_DIR}/back.key:/run/internal-tls/back.key:ro
+    healthcheck:
+      test: [CMD, node, -e, "fetch('https://back:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  front:
+    image: nexoguard-ec2-front:${TLS_RELEASE_TAG:-tls-practical-20261127-r2}
+    environment:
+      API_INTERNAL_URL: https://back:3001
+      NODE_EXTRA_CA_CERTS: /run/internal-tls/ca.pem
+      NEXOGUARD_INTERNAL_TLS_CERT: /run/internal-tls/front.pem
+      NEXOGUARD_INTERNAL_TLS_KEY: /run/internal-tls/front.key
+    volumes:
+      - ${INTERNAL_TLS_DIR}/ca.pem:/run/internal-tls/ca.pem:ro
+      - ${INTERNAL_TLS_DIR}/front.pem:/run/internal-tls/front.pem:ro
+      - ${INTERNAL_TLS_DIR}/front.key:/run/internal-tls/front.key:ro
+    healthcheck:
+      test: [CMD, node, -e, "fetch('https://front:3000/login',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  gateway:
+    image: nexoguard-ec2-gateway:${TLS_RELEASE_TAG:-tls-practical-20261127-r2}
+    volumes:
+      - ${INTERNAL_TLS_DIR}/ca.pem:/run/internal-tls/ca.pem:ro
+  transport:
+    image: nexoguard-ec2-transport:${TLS_RELEASE_TAG:-tls-practical-20261127-r2}
+  migrate:
+    # Existing tools-only profile remains unchanged. Never run during app startup.
+    profiles: [tools]
+    image: nexoguard-ec2-migration:${TLS_RELEASE_TAG:-tls-practical-20261127-r2}

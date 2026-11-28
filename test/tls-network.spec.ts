@@ -11,6 +11,7 @@ import { AnalysisNetwork } from '../src/analysis/infrastructure/analysis-network
 import { OwnershipFileReader } from '../src/sites/infrastructure/ownership-file.reader';
 import { databaseConfig } from '../src/infrastructure/prisma/database-config';
 import { transportCall } from '../src/transport/client';
+import { internalTls } from '../src/security/internal-tls';
 
 // Actual TLS handshakes against ephemeral loopback servers, not public analyses.
 // Only fixture DNS/ports are remapped; certificate verification options are retained.
@@ -51,7 +52,7 @@ describe('TLS real con certificados efímeros y sin MySQL ni proveedores externo
   });
   async function start(name: string) {
     let requests = 0, applicationBytes = 0;
-    const server = createServer({ key: readFileSync(file(`${name}.key`)), cert: readFileSync(file(`${name}.pem`)) }, (req, res) => {
+    const server = createServer(internalTls(true, { NEXOGUARD_INTERNAL_TLS_CERT: file(`${name}.pem`), NEXOGUARD_INTERNAL_TLS_KEY: file(`${name}.key`) })!, (req, res) => {
       requests++;
       expect(req.headers.cookie).toBeUndefined();
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"public":true}');

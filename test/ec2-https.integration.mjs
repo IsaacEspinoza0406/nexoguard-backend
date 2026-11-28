@@ -93,6 +93,8 @@ try {
     assert.ok(Array.isArray(checks));
     assert.deepEqual(checks.filter(c => c.change === 'MEJORO').map(c => c.code).sort(), ['FRAMING', 'HSTS']);
     assert.equal(checks.find(c => c.code === 'CSP').change, 'NO_COMPARABLE');
+    assert.equal(checks.length, 12);
+    for (const check of checks) assert.equal(check.guidance.practical.version, 'practical-v1');
     assert.equal((await owner.send('GET', `/api${path}/analyses`)).data.length, 2);
     stage = 'schedule';
     assert.equal((await owner.mutate(`${path}/schedule`, { enabled: true, intervalMinutes: 1440 })).status, 200);
@@ -101,13 +103,28 @@ try {
     stage = 'alerts'; const alerts = await owner.send('GET', `/api${path}/alerts`); assert.equal(alerts.status, 200); assert.ok(alerts.data.length >= 1);
     engineChecks = { controlledTlsRpc: true, fileOwnershipVerified: true, completedAnalyses: 2, comparisonImprovements: 2, cspNotComparable: true, dailyScheduleSavedThenDisabled: true, controlledCertificateAlertPersisted: true };
   }
+  stage = 'internal-tls';
+  for (const [hostname, port, path] of [['front', 3000, '/login'], ['back', 3001, '/health/ready']]) {
+    const internalCa = readFileSync('/run/internal-tls/ca.pem');
+    async function checkTls(servername, trustedCa) {
+      return new Promise((resolve, reject) => {
+        const r = request({ hostname, port, servername, ca: trustedCa, path, agent: false }, res => { res.resume(); resolve(res.statusCode); });
+        r.on('error', reject); r.end();
+      });
+    }
+    assert.equal(await checkTls(hostname, internalCa), 200);
+    await assert.rejects(checkTls('wrong-name.example.invalid', internalCa), error => error.code === 'ERR_TLS_CERT_ALTNAME_INVALID');
+    await assert.rejects(checkTls(hostname, ca));
+  }
   stage = 'ssr';
-  assert.equal((await owner.send('GET', '/cuenta')).status, 200);
+  const ssr = await owner.send('GET', '/cuenta');
+  assert.equal(ssr.status, 200);
+  assert.ok(ssr.data.includes('Tu cuenta'));
   stage = 'logout';
   const replay = [...owner.jar.values()].map(c => c.pair).join('; ');
   assert.equal((await owner.mutate('/auth/logout')).status, 204);
   assert.equal((await owner.send('GET', '/api/auth/me', undefined, undefined, { Cookie: replay })).status, 401);
   assert.equal((await other.mutate('/auth/logout')).status, 204);
-  console.log(JSON.stringify({ scope: 'real HTTPS with local CA, real Next/Nest/MySQL isolated; not public TLS', frontendCspNonce: true, registration201: true, duplicate409: true, responseOnlyId: true, secureHttpOnlyStrictCookies: true, csrfCookiePath: true, foreignOrigin403: true, invalidCsrf403: true, loginAndSession: true, siteCreationAndHistory: true, foreignHistory404: true, authenticatedSsr: true, logoutAndRevocation: true, ...engineChecks, fictionalUsers: 2, fictionalSites: 1, externalRequests: 0 }));
+  console.log(JSON.stringify({ scope: 'real HTTPS with local CA, real Next/Nest/MySQL isolated; not public TLS', frontendCspNonce: true, internalWebTlsAndNegativeCaName: true, practicalGuides12: true, registration201: true, duplicate409: true, responseOnlyId: true, secureHttpOnlyStrictCookies: true, csrfCookiePath: true, foreignOrigin403: true, invalidCsrf403: true, loginAndSession: true, siteCreationAndHistory: true, foreignHistory404: true, authenticatedSsr: true, logoutAndRevocation: true, ...engineChecks, fictionalUsers: 2, fictionalSites: 1, externalRequests: 0 }));
 } catch { console.error(JSON.stringify({ check: 'EC2_HTTPS_CHECK_FAILED', stage })); process.exitCode = 1; }
 finally { await prisma.onModuleDestroy(); }

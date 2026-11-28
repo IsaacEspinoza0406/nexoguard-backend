@@ -71,15 +71,22 @@ services:
       NEXOGUARD_TRANSPORT_CA_FILE: /run/secrets/ca.pem
       NEXOGUARD_TRANSPORT_PRIVATE_HTTP: 'false'
       NEXOGUARD_TRUST_PROXY_IP: ${GATEWAY_IP:?required}
+      NODE_EXTRA_CA_CERTS: /run/internal-tls/ca.pem
+      NEXOGUARD_INTERNAL_TLS_CERT: /run/internal-tls/back.pem
+      NEXOGUARD_INTERNAL_TLS_KEY: /run/internal-tls/back.key
       NEXOGUARD_SWAGGER_ENABLED: 'false'
-    volumes: ["${PRIVATE_DIR}/ca.pem:/run/secrets/ca.pem:ro"]
+    volumes:
+      - ${PRIVATE_DIR}/ca.pem:/run/secrets/ca.pem:ro
+      - ${INTERNAL_TLS_DIR:?required}/ca.pem:/run/internal-tls/ca.pem:ro
+      - ${INTERNAL_TLS_DIR}/back.pem:/run/internal-tls/back.pem:ro
+      - ${INTERNAL_TLS_DIR}/back.key:/run/internal-tls/back.key:ro
     tmpfs: [/tmp:size=32m]
     networks: [application, database, control]
     depends_on:
       db: {condition: service_healthy}
       transport: {condition: service_healthy}
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: [CMD, node, -e, "fetch('https://back:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -123,13 +130,22 @@ services:
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 128
-    environment: {API_INTERNAL_URL: 'http://back:3001', PORT: '3000'}
+    environment:
+      API_INTERNAL_URL: https://back:3001
+      PORT: '3000'
+      NODE_EXTRA_CA_CERTS: /run/internal-tls/ca.pem
+      NEXOGUARD_INTERNAL_TLS_CERT: /run/internal-tls/front.pem
+      NEXOGUARD_INTERNAL_TLS_KEY: /run/internal-tls/front.key
+    volumes:
+      - ${INTERNAL_TLS_DIR}/ca.pem:/run/internal-tls/ca.pem:ro
+      - ${INTERNAL_TLS_DIR}/front.pem:/run/internal-tls/front.pem:ro
+      - ${INTERNAL_TLS_DIR}/front.key:/run/internal-tls/front.key:ro
     tmpfs: [/tmp:size=16m, '/app/.next/cache:size=32m,uid=1000,gid=1000,mode=0700']
     networks: [application]
     depends_on:
       back: {condition: service_healthy}
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/login',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: [CMD, node, -e, "fetch('https://front:3000/login',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -150,6 +166,7 @@ services:
       TLS_ENABLED: 'true'
     ports: ['${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-80}:8080', '${HTTP_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:8443']
     volumes:
+      - ${INTERNAL_TLS_DIR}/ca.pem:/run/internal-tls/ca.pem:ro
       - ${LETSENCRYPT_DIR:?required}:/etc/letsencrypt:ro
       - ${ACME_DIR:?required}:/var/www/acme:ro
       # Persist the reviewed gateway configuration without rebuilding application images.
