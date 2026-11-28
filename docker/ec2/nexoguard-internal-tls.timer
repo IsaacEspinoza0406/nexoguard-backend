@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily check of NexoGuard internal web certificates
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+RandomizedDelaySec=3600
+Persistent=true
+Unit=nexoguard-internal-tls.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=NexoGuard internal web TLS rotation
+Requires=docker.service
+After=docker.service nexoguard.service network-online.target
+ConditionPathExists=/etc/nexoguard/internal-web.env
+StartLimitIntervalSec=1800
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/nexoguard/current/back/docker/ec2/renew-internal-tls.py
+TimeoutStartSec=900
+Restart=on-failure
+RestartSec=60s
+UMask=0077
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+Environment=DOCKER_CONFIG=/run/nexoguard-tls-docker
+RuntimeDirectory=nexoguard-tls-docker
+RuntimeDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/nexoguard /run/lock
+RestrictAddressFamilies=AF_UNIX
