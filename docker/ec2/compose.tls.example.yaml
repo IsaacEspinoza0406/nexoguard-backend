@@ -1,0 +1,179 @@
+# Reviewed public runtime selection, not the private EC2 operational package.
+# Provision private configuration and valid certificates before startup.
+name: ${COMPOSE_PROJECT_NAME:-nexoguard-tls-example}
+x-logging: &logging
+  driver: json-file
+  options: {max-size: '10m', max-file: '3'}
+x-runtime: &runtime
+  # systemd refreshes host identity BEFORE boot startup; Docker handles crashes.
+  restart: on-failure
+  init: false
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+services:
+  db:
+    <<: *runtime
+    image: ${MYSQL_IMAGE:?configure image privately}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    mem_limit: 1g
+    cpus: 0.75
+    pids_limit: 256
+    stop_grace_period: 120s
+    environment:
+      MYSQL_DATABASE: nexoguard
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db-root-password
+      MYSQL_ROOT_HOST: localhost
+      NEXOGUARD_MYSQL_CA_FILE: /run/secrets/ca.pem
+      NEXOGUARD_MYSQL_CERT_FILE: /run/secrets/db-cert.pem
+      NEXOGUARD_MYSQL_KEY_FILE: /run/secrets/db-key.pem
+      NEXOGUARD_MYSQL_INIT_FILE: /run/secrets/init-users.sql
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ${PRIVATE_DIR}/db-root-password:/run/secrets/db-root-password:ro
+      - ${PRIVATE_DIR}/ca.pem:/run/secrets/ca.pem:ro
+      - ${PRIVATE_DIR}/db-cert.pem:/run/secrets/db-cert.pem:ro
+      - ${PRIVATE_DIR}/db-key.pem:/run/secrets/db-key.pem:ro
+      - ${PRIVATE_DIR}/init-users.sql:/run/secrets/init-users.sql:ro
+    tmpfs: [/run:size=32m, /tmp:size=64m, /docker-entrypoint-initdb.d:size=1m]
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+  back:
+    <<: *runtime
+    image: ${BACK_IMAGE:?configure image privately}
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.75
+    pids_limit: 128
+    stop_grace_period: 65s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?private runtime URL required}
+      NEXOGUARD_CSRF_SECRET: ${NEXOGUARD_CSRF_SECRET:?private secret required}
+      NEXOGUARD_TRANSPORT_SECRET: ${NEXOGUARD_TRANSPORT_SECRET:?private secret required}
+      SSLLABS_ENABLED: ${SSLLABS_ENABLED:-false}
+      HOST: 0.0.0.0
+      PORT: '3001'
+      NEXOGUARD_HTTP_MODE: production
+      FRONTEND_ORIGIN: https://${PUBLIC_HOST:?required}
+      NEXOGUARD_DB_MODE: production_tls
+      NEXOGUARD_DB_EXPECTED_HOST: db
+      NEXOGUARD_DB_EXPECTED_NAME: nexoguard
+      NEXOGUARD_DB_CA_FILE: /run/secrets/ca.pem
+      NEXOGUARD_TRANSPORT_MODE: remote
+      NEXOGUARD_TRANSPORT_URL: https://transport:3002
+      NEXOGUARD_TRANSPORT_CA_FILE: /run/secrets/ca.pem
+      NEXOGUARD_TRANSPORT_PRIVATE_HTTP: 'false'
+      NEXOGUARD_TRUST_PROXY_IP: ${GATEWAY_IP:?required}
+      NEXOGUARD_SWAGGER_ENABLED: 'false'
+    volumes: ["${PRIVATE_DIR}/ca.pem:/run/secrets/ca.pem:ro"]
+    tmpfs: [/tmp:size=32m]
+    networks: [application, database, control]
+    depends_on:
+      db: {condition: service_healthy}
+      transport: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+  transport:
+    <<: *runtime
+    image: ${TRANSPORT_IMAGE:?configure image privately}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP, CHOWN]
+    mem_limit: 384m
+    cpus: 0.75
+    pids_limit: 64
+    stop_grace_period: 60s
+    environment:
+      NEXOGUARD_TRANSPORT_SECRET: ${NEXOGUARD_TRANSPORT_SECRET:?private secret required}
+      SSLLABS_ENABLED: ${SSLLABS_ENABLED:-false}
+      SSLLABS_EMAIL: ${SSLLABS_EMAIL:-}
+      NEXOGUARD_TRANSPORT_TLS_CERT: /run/secrets/transport-cert.pem
+      NEXOGUARD_TRANSPORT_TLS_KEY: /run/secrets/transport-key.pem
+      NEXOGUARD_TRANSPORT_PRIVATE_HTTP: 'false'
+      NEXOGUARD_REQUIRE_HOST_BLOCK: 'true'
+      NEXOGUARD_HOST_PUBLIC_IPV4: ${HOST_PUBLIC_IPV4:?run host preflight first}
+    volumes:
+      - ${PRIVATE_DIR}/transport-cert.pem:/run/secrets/transport-cert.pem:ro
+      - ${PRIVATE_DIR}/transport-key.pem:/run/secrets/transport-key.pem:ro
+    tmpfs: [/run:size=8m, /tmp:size=16m]
+    networks: [control, analyzer-egress]
+    healthcheck:
+      # Loopback TCP is intentionally blocked. This probes process identity only.
+      test: [CMD, node, -e, "const s=require('fs').readFileSync('/proc/1/status','utf8');process.exit(/Uid:[^0-9]*1000/.test(s)&&/CapEff:[^0-9]*0000000000000000/.test(s)?0:1)"]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+  front:
+    <<: *runtime
+    image: ${FRONT_IMAGE:?configure image privately}
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+    environment: {API_INTERNAL_URL: 'http://back:3001', PORT: '3000'}
+    tmpfs: [/tmp:size=16m, '/app/.next/cache:size=32m,uid=1000,gid=1000,mode=0700']
+    networks: [application]
+    depends_on:
+      back: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/login',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+  gateway:
+    <<: *runtime
+    image: ${GATEWAY_IMAGE:?configure image privately}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
+    mem_limit: 96m
+    cpus: 0.25
+    pids_limit: 64
+    stop_grace_period: 30s
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      # Production example requires TLS and fails if certificate files are missing.
+      TLS_ENABLED: 'true'
+    ports: ['${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-80}:8080', '${HTTP_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:8443']
+    volumes:
+      - ${LETSENCRYPT_DIR:?required}:/etc/letsencrypt:ro
+      - ${ACME_DIR:?required}:/var/www/acme:ro
+      # Persist the reviewed gateway configuration without rebuilding application images.
+      - ${FRONT_SOURCE_DIR:?path to sibling frontend required}/docker/ec2/tls.conf.template:/etc/nexoguard/tls.conf.template:ro
+    tmpfs: [/tmp:size=16m, /var/cache/nginx:size=16m]
+    networks:
+      application: {ipv4_address: '${GATEWAY_IP}'}
+      ingress: {}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/health/live']
+      interval: 15s
+      timeout: 3s
+      retries: 4
+volumes:
+  mysql-data: {}
+networks:
+  application:
+    internal: true
+    ipam: {config: [{subnet: '${APP_SUBNET}', ip_range: '${APP_DYNAMIC_RANGE:?required}'}]}
+  database:
+    internal: true
+    ipam: {config: [{subnet: '${DB_SUBNET}'}]}
+  control:
+    internal: true
+    ipam: {config: [{subnet: '${CONTROL_SUBNET}'}]}
+  analyzer-egress: {}
+  ingress: {}
