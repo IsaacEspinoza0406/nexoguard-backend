@@ -1,6 +1,7 @@
 import { codes } from './checks';
+import { PracticalGuide, practicalGuideFor } from './practical-guides';
 
-export type Guidance = { version: string; explanation: string; consequence: string; applicability: string; correctiveAction: string; verification: string };
+export type Guidance = { version: string; explanation: string; consequence: string; applicability: string; correctiveAction: string; verification: string; practical?: PracticalGuide };
 // Editorial guidance is versioned independently from the persisted manual-v1 rules.
 const entries: Record<typeof codes[number], Omit<Guidance, 'version'>> = {
   HTTP_REDIRECT: {
@@ -90,5 +91,5 @@ const entries: Record<typeof codes[number], Omit<Guidance, 'version'>> = {
 };
 
 export function guidanceFor(code: string): Guidance | null {
-  return Object.hasOwn(entries, code) ? { version: 'catalog-v1', ...entries[code as keyof typeof entries] } : null;
+  return Object.hasOwn(entries, code) ? { version: 'catalog-v1', ...entries[code as keyof typeof entries], practical: practicalGuideFor(code as keyof typeof entries) } : null;
 }
