@@ -31,7 +31,11 @@ export class AnalysisNetwork {
   async certificate(domain: string): Promise<CertificateObservation> {
     const target = await this.destination(domain);
     return new Promise((resolve, reject) => {
-      // Diagnostic handshake only. No application data is sent on this socket.
+      // Deliberate diagnostic exception: read invalid/expired certificates as findings.
+      // No HTTP, credentials or application data are sent on this socket. Keep DNS
+      // pinning/SNI and report both CA trust (authorized) and checkServerIdentity.
+      // ManualEngine refuses HTTPS page downloads if either observation fails;
+      // HTTPS downloads, ownership, RPC, MySQL and SSL Labs keep strict verification.
       const socket = this.openTls({ host: target.address, port: 443, servername: domain, rejectUnauthorized: false, ALPNProtocols: ['http/1.1'] });
       const timer = setTimeout(() => socket.destroy(new Error('TLS_TIMEOUT')), 5000);
       socket.once('close', () => clearTimeout(timer));
